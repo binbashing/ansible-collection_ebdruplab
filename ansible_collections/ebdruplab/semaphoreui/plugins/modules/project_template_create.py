@@ -9,6 +9,7 @@ from ..module_utils.semaphore_api import (
 )
 import json
 import copy
+import re
 
 DOCUMENTATION = r'''
 ---
@@ -454,6 +455,44 @@ def merge_for_put(server_obj, desired_payload):
     return merged
 
 
+def build_request_summary(payload):
+    summary = {
+        "keys": sorted(payload.keys()) if isinstance(payload, dict) else [],
+    }
+
+    if isinstance(payload, dict):
+        task_params = payload.get("task_params")
+        if isinstance(task_params, dict):
+            summary["task_params_keys"] = sorted(task_params.keys())
+
+        vaults = payload.get("vaults")
+        if isinstance(vaults, list):
+            summary["vaults_count"] = len(vaults)
+
+    return summary
+
+
+def parse_connection_error(err):
+    err_text = as_text(err).strip()
+    status = None
+    response = ""
+
+    m = re.search(r"status\s+(\d+)", err_text)
+    if m:
+        try:
+            status = int(m.group(1))
+        except ValueError:
+            status = None
+
+    if ":" in err_text:
+      response = err_text.split(":", 1)[1].strip()
+
+    if not response:
+      response = err_text
+
+    return status, response, err_text
+
+
 def main():
     module = AnsibleModule(
         argument_spec=dict(
@@ -504,7 +543,19 @@ def main():
     base_url = f"{host}:{port}/api/project/{project_id}/templates"
     attempts = []
 
-    resp, status, _ = http_post(base_url, create_payload, headers, p["validate_certs"])
+    try:
+        resp, status, _ = http_post(base_url, create_payload, headers, p["validate_certs"])
+    except ConnectionError as e:
+        err_status, err_response, err_text = parse_connection_error(e)
+        module.fail_json(
+            msg="Template creation request failed",
+            status=err_status,
+            response=err_response,
+            error=err_text,
+            request_summary=build_request_summary(create_payload),
+            attempts=attempts,
+        )
+
     attempts.append({"op": "create", "status": status, "request": create_payload})
 
     if status not in (200, 201):
@@ -521,7 +572,19 @@ def main():
         module.exit_json(changed=True, status=status, template=created, attempts=attempts, request=create_payload)
 
     get_url = f"{base_url}/{tpl_id}"
-    resp_g, status_g, _ = http_get(get_url, headers, p["validate_certs"])
+    try:
+        resp_g, status_g, _ = http_get(get_url, headers, p["validate_certs"])
+    except ConnectionError as e:
+        err_status, err_response, err_text = parse_connection_error(e)
+        module.fail_json(
+            msg="Template created but follow-up GET failed",
+            status=err_status,
+            response=err_response,
+            error=err_text,
+            request_summary=build_request_summary(create_payload),
+            attempts=attempts,
+        )
+
     attempts.append({"op": "get-after-create", "status": status_g})
 
     server_obj = created
@@ -533,7 +596,19 @@ def main():
 
     merged = merge_for_put(server_obj, create_payload)
 
-    resp_u, status_u, _ = http_put(get_url, merged, headers, p["validate_certs"])
+    try:
+        resp_u, status_u, _ = http_put(get_url, merged, headers, p["validate_certs"])
+    except ConnectionError as e:
+        err_status, err_response, err_text = parse_connection_error(e)
+        module.fail_json(
+            msg="Template created but merge update request failed",
+            status=err_status,
+            response=err_response,
+            error=err_text,
+            request_summary=build_request_summary(create_payload),
+            attempts=attempts,
+        )
+
     attempts.append({"op": "update-merge", "status": status_u})
 
     if status_u not in (200, 204):

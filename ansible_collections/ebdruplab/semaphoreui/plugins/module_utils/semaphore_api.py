@@ -51,7 +51,13 @@ def semaphore_request(method, url, body=None, headers=None, validate_certs=True)
                 response.getheader("Set-Cookie")
             )
     except urllib.error.HTTPError as e:
-        raise ConnectionError(f"{method} failed with status {e.code}: {e.read().decode()}")
+        raw_body = e.read()
+        body_text = raw_body.decode(errors="replace").strip() if raw_body else ""
+        if not body_text:
+            reason_obj = getattr(e, "reason", "")
+            reason = str(reason_obj).strip() if reason_obj is not None else ""
+            body_text = reason if reason else "<empty response body>"
+        raise ConnectionError(f"{method} failed with status {e.code}: {body_text}")
     except urllib.error.URLError as e:
         raise ConnectionError(f"Failed to connect to {url}: {e}")
 
