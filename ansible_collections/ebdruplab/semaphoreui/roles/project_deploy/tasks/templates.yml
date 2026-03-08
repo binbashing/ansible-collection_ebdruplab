@@ -35,15 +35,15 @@
     templates_by_name: >-
       {{
         dict(
-          (_tpl_list.templates | default([])) | map(attribute='name') | list
-          | zip((_tpl_list.templates | default([])) | map(attribute='id') | list)
+          (_tpl_list.templates | default([], true)) | map(attribute='name') | list
+          | zip((_tpl_list.templates | default([], true)) | map(attribute='id') | list)
         )
       }}
     templates_by_name_full: >-
       {{
         dict(
-          (_tpl_list.templates | default([])) | map(attribute='name') | list
-          | zip((_tpl_list.templates | default([])) | list)
+          (_tpl_list.templates | default([], true)) | map(attribute='name') | list
+          | zip((_tpl_list.templates | default([], true)) | list)
         )
       }}
   tags:
@@ -321,7 +321,7 @@
   when:
     - project_deploy_variable_delete | bool
     - item.name not in (_desired_templates | map(attribute='name') | list)
-  loop: "{{ _tpl_list.templates | default([]) }}"
+  loop: "{{ _tpl_list.templates | default([], true) }}"
   loop_control:
     label: "{{ item.name }}"
   tags:
@@ -352,15 +352,15 @@
     created_templates_by_name: >-
       {{
         dict(
-          (_tpl_list_after.templates | default([])) | map(attribute='name') | list
-          | zip((_tpl_list_after.templates | default([])))
+          (_tpl_list_after.templates | default([], true)) | map(attribute='name') | list
+          | zip((_tpl_list_after.templates | default([], true)))
         )
       }}
     templates_by_name: >-
       {{
         dict(
-          (_tpl_list_after.templates | default([])) | map(attribute='name') | list
-          | zip((_tpl_list_after.templates | default([])) | map(attribute='id') | list)
+          (_tpl_list_after.templates | default([], true)) | map(attribute='name') | list
+          | zip((_tpl_list_after.templates | default([], true)) | map(attribute='id') | list)
         )
       }}
   tags:
